@@ -16,25 +16,30 @@ void grade_backtrace(void);
 int kern_init(void) {
     extern char edata[], end[];
     memset(edata, 0, end - edata);
+cons_init();  // init the console
 
-    cons_init();  // init the console
+const char *message = "(THU.CST) os is loading ...\n";
+cprintf("%s\n\n", message);
 
-    const char *message = "(THU.CST) os is loading ...\n";
-    cprintf("%s\n\n", message);
+print_kerninfo();
 
-    print_kerninfo();
+// grade_backtrace();
 
-    // grade_backtrace();
+idt_init();  // init interrupt descriptor table
 
-    idt_init();  // init interrupt descriptor table
+// rdtime in mbare mode crashes
+clock_init();  // init clock interrupt
 
-    // rdtime in mbare mode crashes
-    clock_init();  // init clock interrupt
+intr_enable();  // enable irq interrupt
 
-    intr_enable();  // enable irq interrupt
-    
-    while (1)
-        ;
+	asm volatile (
+"mret"
+);
+asm volatile (
+	"ebreak"
+);
+while (1)
+    ;
 }
 
 void __attribute__((noinline))
