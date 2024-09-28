@@ -101,18 +101,23 @@ void interrupt_handler(struct trapframe *tf) {
             cprintf("User software interrupt\n");
             break;
         case IRQ_S_TIMER:
-            // "All bits besides SSIP and USIP in the sip register are
-            // read-only." -- privileged spec1.9.1, 4.1.4, p59
-            // In fact, Call sbi_set_timer will clear STIP, or you can clear it
-            // directly.
-            // cprintf("Supervisor timer interrupt\n");
-             /* LAB1 EXERCISE2   YOUR CODE :  */
-            /*(1)设置下次时钟中断- clock_set_next_event()
-             *(2)计数器（ticks）加一
-             *(3)当计数器加到100的时候，我们会输出一个`100ticks`表示我们触发了100次时钟中断，同时打印次数（num）加一
-            * (4)判断打印次数，当打印次数为10时，调用<sbi.h>中的关机函数关机
-            */
-            break;
+        // "All bits besides SSIP and USIP in the sip register are
+        // read-only." -- privileged spec1.9.1, 4.1.4, p59
+        // In fact, Call sbi_set_timer will clear STIP, or you can clear it
+        // directly.
+        // cprintf("Supervisor timer interrupt\n");
+         /* LAB1 EXERCISE2   YOUR CODE :  */
+         clock_set_next_event();//发生这次时钟中断的时候，我们要设置下一次时钟中断
+        if (++ticks % TICK_NUM == 0) {
+            print_ticks();
+            num++;           //打印计数器+1        
+        }
+         if(num==10){
+             sbi_shutdown();
+         } 
+
+        break; 
+        //2211774
         case IRQ_H_TIMER:
             cprintf("Hypervisor software interrupt\n");
             break;
@@ -138,6 +143,8 @@ void interrupt_handler(struct trapframe *tf) {
 }
 
 void exception_handler(struct trapframe *tf) {
+uint32_t instr;  // 声明一个变量用于存储指令
+    instr = *(uint16_t *)(tf->epc);  // 从epc地址读取16位（2字节）的指令
     switch (tf->cause) {
         case CAUSE_MISALIGNED_FETCH:
             break;
@@ -153,9 +160,14 @@ void exception_handler(struct trapframe *tf) {
 		
             cprintf("Exception type: Illegal instruction\n");
             cprintf("Illegal instruction caught at 0x%08x\n", tf->epc);
-            // 更新epc寄存器以跳过异常指令
-            tf->epc += 4;
-            
+           // 更新epc寄存器以跳过异常指令
+            if ((instr & 0x3) != 0x3) {
+                // 2字节压缩指令
+                tf->epc += 2;
+            } else {
+                // 4字节标准指令
+                tf->epc += 4;
+            }
             break;
         case CAUSE_BREAKPOINT:
             //断点异常处理
@@ -167,8 +179,13 @@ void exception_handler(struct trapframe *tf) {
 	    cprintf("Exception type: Breakpoint\n");
             cprintf("ebreak caught at 0x%08x\n", tf->epc);
             // 更新epc寄存器以跳过断点指令
-            tf->epc += 4;
-            
+           if ((instr & 0x3) != 0x3) {
+                // 2字节压缩指令
+                tf->epc += 2;
+            } else {
+                // 4字节指令
+                tf->epc += 4;
+            }
             break;
         case CAUSE_MISALIGNED_LOAD:
             break;
