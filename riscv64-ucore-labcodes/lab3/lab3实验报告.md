@@ -8,7 +8,7 @@
 
 
 
-- 根据阅读实验指导手册，我们知道缺页异常指的是当CPU访问的虚拟地址时， MMU没有办法找到对应的物理地址映射关系，或者与该物理页的访问权不一致而发生的异常。遇到缺页异常时，异常处理程序会把Page Fault分发给`kern/mm/vmm.c`的`do_pgfault()`函数并尝试进行页面置换。
+答：根据阅读实验指导手册，我们知道缺页异常指的是当CPU访问的虚拟地址时， MMU没有办法找到对应的物理地址映射关系，或者与该物理页的访问权不一致而发生的异常。遇到缺页异常时，异常处理程序会把Page Fault分发给`kern/mm/vmm.c`的`do_pgfault()`函数并尝试进行页面置换。
 
 在`do_pgfault()`函数中，如果交换机制已经初始化了（`swap_init_ok` 为真），则会调用swap_in()、page_insert()、swap_map_swappable()函数。
 
@@ -282,6 +282,132 @@ pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create) {
 + **对应关系**：有对应关系。如果页表项映射到了物理地址，那么这个地址对应的就是`Page`中的一项。`Page` 结构体数组的每一项代表一个物理页面，并且可以通过页表项间接关联。页表项存储物理地址信息，这可以用来索引到对应的 `Page` 结构体，从而允许操作系统管理和跟踪物理内存的使用。
 
 
+
+## 练习四：补充完成Clock页替换算法（需要编程）
+
+## （一）实验过程
+
+### 1.初始化函数
+
+首先在`_clock_init_mm`函数里初始化循环链表为空表，并将当前指针（`curr_ptr`）指向链表头。
+
+```
+static int
+_clock_init_mm(struct mm_struct *mm)
+{     
+    /*LAB3 EXERCISE 4: YOUR CODE*/ 
+     // 初始化pra_list_head为空链表
+     // 初始化当前指针curr_ptr指向pra_list_head，表示当前页面替换位置为链表头
+     // 将mm的私有成员指针指向pra_list_head，用于后续的页面替换算法操作
+
+    list_init(&pra_list_head);
+    curr_ptr = &pra_list_head;
+    mm->sm_priv = &pra_list_head;
+
+     //cprintf(" mm->sm_priv %x in fifo_init_mm\n",mm->sm_priv);
+    return 0;
+}
+```
+
+### 2.**页面访问检查与链表维护函数**
+
+在`_clock_map_swappable`函数中我们将页面page插入到页面链表（`pra_list_head`）的末尾，并将访问位（`visited`）置1，表示已被访问。
+
+```
+static int
+_clock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
+{
+    list_entry_t *entry=&(page->pra_page_link);
+
+    assert(entry != NULL && curr_ptr != NULL);
+    //record the page access situlation
+    /*LAB3 EXERCISE 4: YOUR CODE*/ 
+    // link the most recent arrival page at the back of the pra_list_head qeueue.
+    // 将页面page插入到页面链表pra_list_head的末尾
+    // 将页面的visited标志置为1，表示该页面已被访问
+    // list_add_before(&pra_list_head,entry);
+    list_add_before((list_entry_t*) mm->sm_priv,entry);
+    page->visited = 1;
+    return 0;
+}
+```
+
+### 3.**页面替换函数**
+
+在`_clock_swap_out_victim` 函数中我们循环遍历整个循环链表，进行筛选。当页面没被访问过，即访问位`visited`为0，将该页面换出并跳出循环；如果页面被访问过，即`visited` 为1，将该访问位置0，继续遍历。
+
+```
+static int
+_clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick)
+{
+     list_entry_t *head=(list_entry_t*) mm->sm_priv;
+        assert(head != NULL);
+    assert(in_tick==0);
+     /* Select the victim */
+     //(1)  unlink the  earliest arrival page in front of pra_list_head qeueue
+     //(2)  set the addr of addr of this page to ptr_page
+    while (1) {
+        /*LAB3 EXERCISE 4: YOUR CODE*/ 
+        // 编写代码
+        // 遍历页面链表pra_list_head，查找最早未被访问的页面
+        // 获取当前页面对应的Page结构指针
+        // 如果当前页面未被访问，则将该页面从页面链表中删除，并将该页面指针赋值给ptr_page作为换出页面
+        // 如果当前页面已被访问，则将visited标志置为0，表示该页面已被重新访问
+        curr_ptr = list_next(curr_ptr);
+        if(curr_ptr == head) {
+            curr_ptr = list_next(curr_ptr);
+            if(curr_ptr == head) {
+                *ptr_page = NULL;
+                break;
+            }
+        }
+        struct Page* page = le2page(curr_ptr, pra_page_link);
+        if(!page->visited) {
+            *ptr_page = page;
+            list_del(curr_ptr);
+            cprintf("curr_ptr %p\n",curr_ptr);
+            //curr_ptr = head;
+            break;
+        } else {
+            page->visited = 0;
+        }
+    }
+    return 0;
+}
+```
+
+`make grade` 结果如下：
+
+![b75417510541c343d9ef66ee87cf209](C:\Users\86186\Documents\WeChat Files\wxid_50jghqp5cw7s12\FileStorage\Temp\b75417510541c343d9ef66ee87cf209.jpg)
+
+## （二）比较Clock页替换算法和FIFO算法
+
+### 1. **算法原理**
+
+- **FIFO算法**：
+  - 直接按照页进入内存的时间顺序进行替换。
+  - 最早进入内存的页在需要替换时会优先被移出，无论其是否被最近访问。
+  - 实现简单，只需维护一个队列。
+- **Clock算法**（改进的LRU近似算法）：
+  - 使用一个环形队列（或逻辑时钟）和一个辅助的“使用位”。
+  - 如果页被访问过，设置其使用位为1；当需要替换页时，查找使用位为0的页进行替换。
+  - 替换过程中，使用位为1的页会被重置为0，并继续向前查找。
+
+### 2. **性能比较**
+
+- FIFO算法：
+  - 简单但容易产生“Belady’s Anomaly”（页错误率可能随内存页数增加而增高）。
+  - 不考虑页的使用频率，可能替换掉仍在频繁使用的页（次优）。
+- Clock算法：
+  - 避免了Belady’s Anomaly，因为它考虑了页面是否最近被使用。
+  - 具有更好的性能，因为不会轻易替换掉最近使用过的页。
+
+### 3. **时间复杂度**
+
+- FIFO算法：
+  - 查找待替换页的时间复杂度为O(1)，因为只需队列头部操作。
+- Clock算法：
+  - 查找待替换页可能需要扫描多页，最坏情况下时间复杂度为O(n)，其中n是页面数。
 
 
 
