@@ -177,7 +177,7 @@ get_pid(void) {
 void
 proc_run(struct proc_struct *proc) {
     if (proc != current) {
-        // LAB4:EXERCISE3 YOUR CODE
+        // LAB4:EXERCISE3 2213787
         /*
         * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
         * MACROs or Functions:
@@ -186,7 +186,21 @@ proc_run(struct proc_struct *proc) {
         *   lcr3():                   Modify the value of CR3 register
         *   switch_to():              Context switching between two processes
         */
-       
+       //禁用中断
+       //切换当前进程为要运行的进程
+       struct proc_struct *from=current;
+       struct proc_struct *to=proc;
+       bool intr_flag;
+       ////禁用中断，以免进程切换时被中断
+       local_intr_save(intr_flag);
+        {//切换进程
+            current = proc;
+            load_esp0(to->kstack + KSTACKSIZE);
+            lcr3(to->cr3);//切换页表，以便使用新进程的地址空间
+            switch_to(&(from->context), &(to->context));//上下文切换
+        }
+        //中断恢复
+        local_intr_restore(intr_flag);
     }
 }
 
