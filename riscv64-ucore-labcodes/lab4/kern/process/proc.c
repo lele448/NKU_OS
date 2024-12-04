@@ -323,6 +323,7 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
 
     //    7. set ret vaule using child proc's pid
     ret = proc->pid;
+    #2211774 崔扬
     
 
 fork_out:
