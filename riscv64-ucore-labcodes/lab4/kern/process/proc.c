@@ -86,7 +86,7 @@ static struct proc_struct *
 alloc_proc(void) {
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL) {
-    //LAB4:EXERCISE1 2213648
+    //LAB4:EXERCISE1 YOUR CODE
     /*
      * below fields in proc_struct need to be initialized
      *       enum proc_state state;                      // Process state
@@ -102,20 +102,6 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
-     
-        proc->state = PROC_UNINIT;               
-        proc->pid = -1;                         
-        proc->runs = 0;                          
-        proc->kstack = 0;          
-        proc->need_resched = false;              
-        proc->parent = NULL;                    
-        proc->mm = NULL;                         
-        memset(&(proc->context), 0, sizeof(struct context)); 
-        proc->tf = NULL;                        
-        proc->cr3 = boot_cr3;                     
-        proc->flags = 0;                        
-        memset(proc->name, 0, PROC_NAME_LEN); 
-        
 
 
     }
@@ -177,7 +163,7 @@ get_pid(void) {
 void
 proc_run(struct proc_struct *proc) {
     if (proc != current) {
-        // LAB4:EXERCISE3 2213787
+        // LAB4:EXERCISE3 YOUR CODE
         /*
         * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
         * MACROs or Functions:
@@ -186,21 +172,7 @@ proc_run(struct proc_struct *proc) {
         *   lcr3():                   Modify the value of CR3 register
         *   switch_to():              Context switching between two processes
         */
-       //禁用中断
-       //切换当前进程为要运行的进程
-       struct proc_struct *from=current;
-       struct proc_struct *to=proc;
-       bool intr_flag;
-       ////禁用中断，以免进程切换时被中断
-       local_intr_save(intr_flag);
-        {//切换进程
-            current = proc;
-            load_esp0(to->kstack + KSTACKSIZE);
-            lcr3(to->cr3);//切换页表，以便使用新进程的地址空间
-            switch_to(&(from->context), &(to->context));//上下文切换
-        }
-        //中断恢复
-        local_intr_restore(intr_flag);
+       
     }
 }
 
@@ -318,15 +290,39 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
      *   proc_list:    the process set's list
      *   nr_process:   the number of process set
      */
+    proc = alloc_proc();
+    if (proc == NULL) {
+        goto fork_out;
+    }
+    proc->parent = current;
 
-    //    1. call alloc_proc to allocate a proc_struct
     //    2. call setup_kstack to allocate a kernel stack for child process
+    if (setup_kstack(proc) != 0) {
+        goto bad_fork_cleanup_proc;
+    }
     //    3. call copy_mm to dup OR share mm according clone_flag
-    //    4. call copy_thread to setup tf & context in proc_struct
-    //    5. insert proc_struct into hash_list && proc_list
-    //    6. call wakeup_proc to make the new child process RUNNABLE
-    //    7. set ret vaule using child proc's pid
+    if (copy_mm(clone_flags, proc) != 0)
+        goto bad_fork_cleanup_kstack;
 
+    //    4. call copy_thread to setup tf & context in proc_struct
+    copy_thread(proc, stack, tf);
+
+    //    5. insert proc_struct into hash_list && proc_list
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        proc->pid = get_pid();
+        hash_proc(proc);
+        list_add(&proc_list, &(proc->list_link));
+        nr_process ++;
+    }
+    local_intr_restore(intr_flag);
+
+    //    6. call wakeup_proc to make the new child process RUNNABLE
+    wakeup_proc(proc);
+
+    //    7. set ret vaule using child proc's pid
+    ret = proc->pid;
     
 
 fork_out:
