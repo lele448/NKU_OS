@@ -370,7 +370,7 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
             assert(page != NULL);
             assert(npage != NULL);
             int ret = 0;
-            /* LAB5:EXERCISE2 YOUR CODE
+            /* LAB5:EXERCISE2 2213648
              * replicate content of page to npage, build the map of phy addr of
              * nage with the linear addr start
              *
@@ -388,6 +388,12 @@ int copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end,
              * (3) memory copy from src_kvaddr to dst_kvaddr, size is PGSIZE
              * (4) build the map of phy addr of  nage with the linear addr start
              */
+             void *src_kvaddr = page2kva(page);   // 1. 源页面的内核虚拟地址
+             void *dst_kvaddr = page2kva(npage);  // 2. 目标页面的内核虚拟地址
+             // 3. 复制页面内容
+             memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
+             // 4. 在目标页表中建立映射
+             ret = page_insert(to, npage, start, perm);
 
 
             assert(ret == 0);
