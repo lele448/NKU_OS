@@ -595,7 +595,7 @@ load_icode(unsigned char *binary, size_t size) {
     // Keep sstatus
     uintptr_t sstatus = tf->status;
     memset(tf, 0, sizeof(struct trapframe));
-    /* LAB5:EXERCISE1 YOUR CODE
+    /* LAB5:EXERCISE1 2213787
      * should set tf->gpr.sp, tf->epc, tf->status
      * NOTICE: If we set trapframe correctly, then the user level process can return to USER MODE from kernel. So
      *          tf->gpr.sp should be user stack top (the value of sp)
@@ -604,7 +604,9 @@ load_icode(unsigned char *binary, size_t size) {
      *          hint: check meaning of SPP, SPIE in SSTATUS, use them by SSTATUS_SPP, SSTATUS_SPIE(defined in risv.h)
      */
 
-
+tf->gpr.sp = USTACKTOP; // 用户栈的顶
+tf->epc = elf->e_entry; //设置用户程序的入口地址
+tf->status = (read_csr(sstatus) & ~SSTATUS_SPP & ~SSTATUS_SPIE); 
     ret = 0;
 out:
     return ret;
