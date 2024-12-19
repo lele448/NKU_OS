@@ -85,6 +85,7 @@ void switch_to(struct context *from, struct context *to);
 // alloc_proc - alloc a proc_struct and init all fields of proc_struct
 static struct proc_struct *
 alloc_proc(void) {
+
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL) {
     //LAB4:EXERCISE1 YOUR CODE
@@ -111,7 +112,8 @@ alloc_proc(void) {
      *       struct proc_struct *cptr, *yptr, *optr;     // relations between processes
      */
      
-     
+     proc->wait_state = 0; // 初始化进程等待状态
+proc->cptr = proc->optr = proc->yptr = NULL; // 设置进程指针
         proc->state = PROC_UNINIT;               
         proc->pid = -1;                         
         proc->runs = 0;                          
@@ -457,8 +459,9 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     {
         proc->pid = get_pid();
         hash_proc(proc);
-        list_add(&proc_list, &(proc->list_link));
-        nr_process ++;
+        // list_add(&proc_list, &proc->list_link); // 这才是正确的打开方式（bushi）
+// nr_process++; // 更新进程数
+set_links(proc); // 设置进程链接
     }
     local_intr_restore(intr_flag);
 
